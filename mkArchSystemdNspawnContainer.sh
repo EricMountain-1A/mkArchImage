@@ -7,6 +7,7 @@ readonly packages_to_skip=(
     dhcpcd
     e2fsprogs
     inetutils
+    iputils
     jfsutils
     licenses
     linux
@@ -44,22 +45,10 @@ readonly root_dir="/var/lib/machines/$1"
 
 hash pacstrap || pacman -S --noconfirm arch-install-scripts
 btrfs subvolume create "$root_dir"
-pacstrap -c -d "$root_dir" $packages_to_install
+pacstrap -c -d "$root_dir" $packages_to_install --hookdir /no_hook
 arch-chroot "$root_dir" systemctl enable systemd-networkd
 arch-chroot "$root_dir" systemctl enable systemd-resolved
 rm "$root_dir/etc/resolv.conf"
-ln -s /run/systemd/resolve/resolv.conf "$root_dir/etc/resolv.conf"
-cat >"$root_dir/etc/systemd/network/80-container-ipvlan.network" <<"EOF"
-[Match]
-Virtualization=container
-Name=iv-*
-
-[Network]
-DHCP=yes
-LinkLocalAddressing=yes
-
-[DHCP]
-UseTimezone=yes
-EOF
-
-# machinectl read-only "$1" true
+ln -s ../run/systemd/resolve/resolv.conf "$root_dir/etc/resolv.conf"
+sed -i 's/\<dns\>/resolve/' "$root_dir"/etc/nsswitch.conf
+machinectl read-only "$1" true
