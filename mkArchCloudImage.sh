@@ -73,13 +73,16 @@ log "Installing the system..."
 readonly base_packages=($(pacman -Sg base | cut -d' ' -f2))
 readonly packages_to_install="$(comm -23 <(IFS=$'\n'; sort <<<"${base_packages[*]}") <(IFS=$'\n'; sort <<<"${packages_to_skip[*]}")) ${packages_to_add[@]}"
 pacstrap -c "$disk_mount" $packages_to_install
-genfstab -U -p "$disk_mount" | sed 's|$disk_device|/dev/vda|g; /swap/d' >> "$disk_mount"/etc/fstab
+readonly disk_uuid="$(blkid -s UUID -o value "$disk_device")"
+genfstab -U -p "$disk_mount" | sed "s|$disk_device|UUID=$disk_uuid|g; /swap/d" >> "$disk_mount"/etc/fstab
 sed -i 's|^GRUB_CMDLINE_LINUX=".*|GRUB_CMDLINE_LINUX="init=/usr/lib/systemd/systemd console=ttyS0,115200n8 console=tty1"|;
         s|^GRUB_TIMEOUT=.*|GRUB_TIMEOUT=0|' "$disk_mount"/etc/default/grub
 arch-chroot "$disk_mount" grub-install --recheck --target=i386-pc "$disk_device"
-arch-chroot "$disk_mount" grub-mkconfig | sed "s|$disk_device|/dev/vda|g" > "$disk_mount"/boot/grub/grub.cfg
+arch-chroot "$disk_mount" grub-mkconfig | sed "s|$disk_device|UUID=$disk_uuid|g" > "$disk_mount"/boot/grub/grub.cfg
 sed -i '/^HOOKS=/s/autodetect//' "$disk_mount"/etc/mkinitcpio.conf
 arch-chroot "$disk_mount" mkinitcpio -p linux
+arch-chroot "$disk_mount" systemctl enable btrfs-scrub@-.timer
+arch-chroot "$disk_mount" systemctl enable fstrim.timer
 arch-chroot "$disk_mount" systemctl enable systemd-networkd
 arch-chroot "$disk_mount" systemctl enable systemd-resolved
 rm "$disk_mount"/etc/resolv.conf
